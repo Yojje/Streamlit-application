@@ -13,6 +13,8 @@ from queue import Queue
 import pyttsx3
 import pandas as pd
 import math
+from streamlit_webrtc import webrtc_streamer, VideoProcessorBase, RTCConfiguration, WebRtcMode
+import av
 
 # Page configuration
 st.set_page_config(
