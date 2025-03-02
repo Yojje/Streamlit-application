@@ -1,5 +1,7 @@
 import config
 import streamlit as st
+from streamlit_webrtc import webrtc_streamer, VideoProcessorBase, RTCConfiguration
+import av
 import time
 import numpy as np
 import cv2
@@ -13,8 +15,6 @@ from queue import Queue
 import pyttsx3
 import pandas as pd
 import math
-from streamlit_webrtc import webrtc_streamer, VideoProcessorBase, RTCConfiguration, WebRtcMode
-import av
 
 # Page configuration
 st.set_page_config(
@@ -22,74 +22,9 @@ st.set_page_config(
     page_icon="🧘‍♀️",
     layout="wide"
 )
-class VideoProcessor(VideoProcessorBase):
-    def __init__(self, pose_classifier):
-        self.classifier = pose_classifier
-        self.pose = self.classifier.mp_pose.Pose(
-            min_detection_confidence=0.5,
-            min_tracking_confidence=0.5
-        )
-
-    def recv(self, frame):
-        img = frame.to_ndarray(format="bgr24")
-        
-        # Process frame
-        image = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        image.flags.writeable = False
-        results = self.pose.process(image)
-        image.flags.writeable = True
-
-        try:
-            if not results.pose_landmarks:
-                st.session_state.status = 'No body detected'
-                self.classifier.queue_speech("No body detected")
-            else:
-                # Draw landmarks
-                self.classifier.mp_drawing.draw_landmarks(
-                    image, results.pose_landmarks, self.classifier.mp_pose.POSE_CONNECTIONS
-                )
-
-                # Check visibility
-                all_visible, missing = self.classifier.check_visibility(results.pose_landmarks.landmark)
-                
-                if not all_visible:
-                    st.session_state.status = 'Please bring your entire body in frame'
-                    self.classifier.queue_speech("Please bring your entire body in frame")
-                else:
-                    # Process landmarks and make prediction
-                    landmarks = []
-                    for landmark in results.pose_landmarks.landmark:
-                        landmarks.extend([landmark.x, landmark.y, landmark.z, landmark.visibility])
-
-                    X = pd.DataFrame([landmarks])
-                    X_scaled = self.classifier.preprocessors['scaler'].transform(X)
-                    pred = self.classifier.model.predict(X_scaled, verbose=0)
-                    pred_class = self.classifier.preprocessors['label_encoder'].inverse_transform([np.argmax(pred)])[0]
-                    pred_prob = float(np.max(pred))
-
-                    # Update pose if changed significantly
-                    if (pred_class != self.classifier.current_pose or 
-                        abs(pred_prob - self.classifier.current_confidence) > 0.1):
-                        self.classifier.current_pose = pred_class
-                        self.classifier.current_confidence = pred_prob
-                        st.session_state.pose_info = {
-                            'class': pred_class,
-                            'confidence': pred_prob
-                        }
-
-                    # Check angles
-                    angles_ok, message = self.classifier.check_angles(results, pred_class)
-                    st.session_state.angles_ok = angles_ok
-                    st.session_state.message = message
-
-        except Exception as e:
-            st.session_state.status = f"Error: {str(e)}"
-
-        return av.VideoFrame.from_ndarray(image, format="rgb24")
-
 
 class RealtimePoseClassifier:
-    def __init__(self, model_dir='model'):
+    def __init__(self, model_dir='Streamlit-application/model', pose_classifier=mp.solutions.pose):
         try:
             # Load model components
             self.model = tf.keras.models.load_model(os.path.join(model_dir, 'upward_salute_pose_classifier_v4.0.h5'))
@@ -102,6 +37,11 @@ class RealtimePoseClassifier:
             # MediaPipe setup
             self.mp_pose = mp.solutions.pose
             self.mp_drawing = mp.solutions.drawing_utils
+            self.classifier = pose_classifier
+            self.pose = self.classifier.mp_pose.Pose(
+                min_detection_confidence=0.5,
+                min_tracking_confidence=0.5
+            )
         except Exception as e:
             raise Exception(f"Failed to initialize classifier: {str(e)}")
         # Load metadata
@@ -134,7 +74,7 @@ class RealtimePoseClassifier:
         self.last_message_time = 0
 
         # Reference video setup
-        video_path = 'data/upstand1.mp4'
+        video_path = 'C:/Users/DELL/YOJE/Services/data/upstand1.mp4'
         if not os.path.exists(video_path):
             raise FileNotFoundError(f"Reference video not found at {video_path}")
             
@@ -277,79 +217,123 @@ class RealtimePoseClassifier:
         except Exception as e:
             return False, f"Error calculating angles: {e}"
 
-    def run_detection(self):
+    def run_detection(self, frame):
         st.title("Yoga Pose Classification")
-        
+    
+        # Subtitle and instructions using markdown hierarchy
         st.markdown("""
-            ## Upward Salute (Urdhva Hastasana)
-            ### Instructions
-            * Keep your back straight
-            * Extend your arms fully
-            * Maintain balance
-            * Follow the reference video
+            * Upward Salute (Urdhva Hastasana)
+            * Follow the reference video to perform the pose correctly.
+            * Don't forget to give Feedback!!
         """)
-        
-        # Initialize session state
-        if 'status' not in st.session_state:
-            st.session_state.status = ''
-        if 'pose_info' not in st.session_state:
-            st.session_state.pose_info = None
-        if 'angles_ok' not in st.session_state:
-            st.session_state.angles_ok = False
-        if 'message' not in st.session_state:
-            st.session_state.message = ''
         
         # Create layout
         col1, col2 = st.columns([3, 1])
         
         # Main video feed column
         with col1:
-            # WebRTC Configuration
-            rtc_config = RTCConfiguration(
-                {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
-            )
-            
-            # Create WebRTC streamer
-            webrtc_ctx = webrtc_streamer(
-                key="yoga-pose",
-                mode=WebRtcMode.SENDRECV,
-                rtc_configuration=rtc_config,
-                video_processor_factory=lambda: VideoProcessor(self),
-                media_stream_constraints={"video": True, "audio": False},
-            )
-            
-            # Status display
+            frame_window = st.image([])
             status_text = st.empty()
-            if st.session_state.status:
-                status_text.warning(st.session_state.status)
         
-        # Reference pose column
-        with col2:
-            st.markdown("### Reference Pose")
-            reference_window = st.empty()
-            pose_container = st.empty()
-    
-            # Show reference video
-            if self.update_reference_frame():
-                reference_window.image(
-                    self.reference_frame,
-                    channels="RGB",
-                    caption="Reference: Upward Salute Pose"
-                )
-            
-            # Display pose information
-            if st.session_state.pose_info:
-                pose_container.success(f"""
-                    ### Current Pose
-                    **Class:** {st.session_state.pose_info['class']}  
-                    **Confidence:** {st.session_state.pose_info['confidence']:.2f}
-                """)
-            
-            # Display angle status
-            if st.session_state.angles_ok:
-                status_text.success("✅ Correct pose!")
-            elif st.session_state.message:
-                status_text.warning(f"⚠️ {st.session_state.message}")
+        # Control buttons
+        start_button = st.button("Start Camera")
+        stop_button = st.button("Stop")
+
+        # Initialize and start camera feed
+        if start_button and not stop_button:
+            cap = frame.to_ndarray(format="bgr24")
+            pose = self.mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5)
+
+            # Reference pose column
+            with col2:
+                reference_window = st.image([])
+                pose_container = st.empty()
+
+                # Show initial reference frame
+                if self.update_reference_frame():
+                    reference_window.image(self.reference_frame, channels="RGB")
+
+            while cap.isOpened():
+                ret, frame = cap.read()
+                if not ret:
+                    break
+
+                # Process frame
+                image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                image.flags.writeable = False
+                results = pose.process(image)
+                image.flags.writeable = True
+
+                try:
+                    if not results.pose_landmarks:
+                        status_text.error('No body detected')
+                        self.queue_speech("No body detected")
+                    else:
+                        # Draw landmarks
+                        self.mp_drawing.draw_landmarks(
+                            image, results.pose_landmarks, self.mp_pose.POSE_CONNECTIONS
+                        )
+
+                        # Check visibility
+                        all_visible, missing = self.check_visibility(results.pose_landmarks.landmark)
+                        
+                        if not all_visible:
+                            status_text.warning('Please bring your entire body in frame')
+                            self.queue_speech("Please bring your entire body in frame")
+                        else:
+                            # Extract landmarks
+                            landmarks = []
+                            for landmark in results.pose_landmarks.landmark:
+                                landmarks.extend([landmark.x, landmark.y, landmark.z, landmark.visibility])
+
+                            # Make prediction
+                            X = pd.DataFrame([landmarks])
+                            X_scaled = self.preprocessors['scaler'].transform(X)
+                            pred = self.model.predict(X_scaled, verbose=0)
+                            pred_class = self.preprocessors['label_encoder'].inverse_transform([np.argmax(pred)])[0]
+                            pred_prob = float(np.max(pred))
+
+                            # Update pose only if it changed significantly
+                            if pred_class != self.current_pose or abs(pred_prob - self.current_confidence) > 0.1:
+                                self.current_pose = pred_class
+                                self.current_confidence = pred_prob
+                                pose_container.success(f"""
+                                    ### Current Pose
+                                    **Class:** {self.current_pose}  
+                                    **Confidence:** {self.current_confidence:.2f}
+                                """)
+
+                            # Check angles and update reference
+                            angles_ok, message = self.check_angles(results, pred_class)
+                            if self.update_reference_frame():
+                                reference_window.image(
+                                    self.reference_frame, 
+                                    channels="RGB",
+                                    caption="Reference: Upward Salute Pose"
+                                )
+
+                            # Update status
+                            if angles_ok:
+                                status_text.success("✅ Correct pose!")
+                            else:
+                                status_text.warning(f"⚠️ {message}")
+
+                except Exception as e:
+                    status_text.error(f"Error: {str(e)}")
+                    print(f"Error in pose detection: {str(e)}")
+
+                # Display the processed frame
+                frame_window.image(image, channels="RGB")
+
+                # Check for stop button
+                if stop_button:
+                    break
+
+            # Cleanup
+            status_text.empty()
+            frame_window.empty()
+            reference_window.empty()
+            pose_container.empty()
 
 def show_user_page():
     # Initialize session state for feedback if not exists
