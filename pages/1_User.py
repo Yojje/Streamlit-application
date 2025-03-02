@@ -234,7 +234,14 @@ class RealtimePoseClassifier:
 
         # Initialize and start camera feed
         if start_button and not stop_button:
-            cap = cv2.VideoCapture(0)
+            # Try different camera indices
+            for index in range(-1, 2):
+                cap = cv2.VideoCapture(index)
+                if cap.isOpened():
+                    print(f"Camera initialized successfully with index {index}")
+                    break
+            else:
+                print("Failed to initialize camera with any index")
             pose = self.mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5)
 
             # Reference pose column
