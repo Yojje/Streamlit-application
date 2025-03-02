@@ -1,9 +1,9 @@
-numpy
-pandas
 streamlit
+numpy
+opencv-python-headless
 mediapipe
-opencv-python
-scikit-learn
-joblib
-pyttsx3
 tensorflow
+joblib
+pandas
+pyttsx3
+python-dotenv
