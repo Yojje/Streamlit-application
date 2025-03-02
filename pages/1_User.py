@@ -376,12 +376,11 @@ def main():
     
     # WebRTC streamer component
     webrtc_ctx = webrtc_streamer(
-        key="yoga-pose-classification",
-        mode=webrtc_streamer.RENDER_MODE,
-        video_processor_factory=PoseProcessor,
-        rtc_configuration=rtc_config,
-        media_stream_constraints={"video": True, "audio": False},
-        async_processing=True,
+    key="yoga-pose-classification",
+    video_processor_factory=PoseProcessor,
+    rtc_configuration=rtc_config,
+    media_stream_constraints={"video": True, "audio": False},
+    async_processing=True,
     )
     
     # Display current pose information
