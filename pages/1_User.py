@@ -21,7 +21,7 @@ st.set_page_config(
 )
 
 class RealtimePoseClassifier:
-    def __init__(self, model_dir='C:/Users/DELL/YOJE/Services/Machine Learning Pipeline/models/try3'):
+    def __init__(self, model_dir='C:\Users\DELL\YOJE\pose-classification-server\Streamlit-application\model'):
         try:
             # Load model components
             self.model = tf.keras.models.load_model(os.path.join(model_dir, 'upward_salute_pose_classifier_v4.0.h5'))
