@@ -217,6 +217,7 @@ class RealtimePoseClassifier:
         st.markdown("""
             * Upward Salute (Urdhva Hastasana)
             * Follow the reference video to perform the pose correctly.
+            * Don't forget to give Feedback!!
         """)
         
         # Create layout
