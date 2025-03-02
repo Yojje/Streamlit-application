@@ -7,3 +7,7 @@ ENV/
 *.csv
 .DS_Store
 data/
+.ipynb_checkpoints
+*.log
+.idea/
+.vscode/
