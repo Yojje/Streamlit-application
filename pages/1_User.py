@@ -67,7 +67,7 @@ class RealtimePoseClassifier:
         self.last_message_time = 0
 
         # Reference video setup
-        video_path = 'C:/Users/DELL/YOJE/Services/data/upstand1.mp4'
+        video_path = 'data/upstand1.mp4'
         if not os.path.exists(video_path):
             raise FileNotFoundError(f"Reference video not found at {video_path}")
             
