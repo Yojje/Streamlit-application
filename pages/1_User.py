@@ -278,78 +278,78 @@ class RealtimePoseClassifier:
             return False, f"Error calculating angles: {e}"
 
     def run_detection(self):
-    st.title("Yoga Pose Classification")
-    
-    st.markdown("""
-        ## Upward Salute (Urdhva Hastasana)
-        ### Instructions
-        * Keep your back straight
-        * Extend your arms fully
-        * Maintain balance
-        * Follow the reference video
-    """)
-    
-    # Initialize session state
-    if 'status' not in st.session_state:
-        st.session_state.status = ''
-    if 'pose_info' not in st.session_state:
-        st.session_state.pose_info = None
-    if 'angles_ok' not in st.session_state:
-        st.session_state.angles_ok = False
-    if 'message' not in st.session_state:
-        st.session_state.message = ''
-    
-    # Create layout
-    col1, col2 = st.columns([3, 1])
-    
-    # Main video feed column
-    with col1:
-        # WebRTC Configuration
-        rtc_config = RTCConfiguration(
-            {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
-        )
+        st.title("Yoga Pose Classification")
         
-        # Create WebRTC streamer
-        webrtc_ctx = webrtc_streamer(
-            key="yoga-pose",
-            mode=WebRtcMode.SENDRECV,
-            rtc_configuration=rtc_config,
-            video_processor_factory=lambda: VideoProcessor(self),
-            media_stream_constraints={"video": True, "audio": False},
-        )
+        st.markdown("""
+            ## Upward Salute (Urdhva Hastasana)
+            ### Instructions
+            * Keep your back straight
+            * Extend your arms fully
+            * Maintain balance
+            * Follow the reference video
+        """)
         
-        # Status display
-        status_text = st.empty()
-        if st.session_state.status:
-            status_text.warning(st.session_state.status)
-    
-    # Reference pose column
-    with col2:
-        st.markdown("### Reference Pose")
-        reference_window = st.empty()
-        pose_container = st.empty()
-
-        # Show reference video
-        if self.update_reference_frame():
-            reference_window.image(
-                self.reference_frame,
-                channels="RGB",
-                caption="Reference: Upward Salute Pose"
+        # Initialize session state
+        if 'status' not in st.session_state:
+            st.session_state.status = ''
+        if 'pose_info' not in st.session_state:
+            st.session_state.pose_info = None
+        if 'angles_ok' not in st.session_state:
+            st.session_state.angles_ok = False
+        if 'message' not in st.session_state:
+            st.session_state.message = ''
+        
+        # Create layout
+        col1, col2 = st.columns([3, 1])
+        
+        # Main video feed column
+        with col1:
+            # WebRTC Configuration
+            rtc_config = RTCConfiguration(
+                {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
             )
+            
+            # Create WebRTC streamer
+            webrtc_ctx = webrtc_streamer(
+                key="yoga-pose",
+                mode=WebRtcMode.SENDRECV,
+                rtc_configuration=rtc_config,
+                video_processor_factory=lambda: VideoProcessor(self),
+                media_stream_constraints={"video": True, "audio": False},
+            )
+            
+            # Status display
+            status_text = st.empty()
+            if st.session_state.status:
+                status_text.warning(st.session_state.status)
         
-        # Display pose information
-        if st.session_state.pose_info:
-            pose_container.success(f"""
-                ### Current Pose
-                **Class:** {st.session_state.pose_info['class']}  
-                **Confidence:** {st.session_state.pose_info['confidence']:.2f}
-            """)
-        
-        # Display angle status
-        if st.session_state.angles_ok:
-            status_text.success("✅ Correct pose!")
-        elif st.session_state.message:
-            status_text.warning(f"⚠️ {st.session_state.message}")
+        # Reference pose column
+        with col2:
+            st.markdown("### Reference Pose")
+            reference_window = st.empty()
+            pose_container = st.empty()
+    
+            # Show reference video
+            if self.update_reference_frame():
+                reference_window.image(
+                    self.reference_frame,
+                    channels="RGB",
+                    caption="Reference: Upward Salute Pose"
+                )
+            
+            # Display pose information
+            if st.session_state.pose_info:
+                pose_container.success(f"""
+                    ### Current Pose
+                    **Class:** {st.session_state.pose_info['class']}  
+                    **Confidence:** {st.session_state.pose_info['confidence']:.2f}
+                """)
+            
+            # Display angle status
+            if st.session_state.angles_ok:
+                status_text.success("✅ Correct pose!")
+            elif st.session_state.message:
+                status_text.warning(f"⚠️ {st.session_state.message}")
 
 def show_user_page():
     # Initialize session state for feedback if not exists
