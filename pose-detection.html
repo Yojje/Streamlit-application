@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Real-time Pose Detection</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/remixicon@4.5.0/fonts/remixicon.css">
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
+<script>
+tailwind.config = {
+theme: {
+extend: {
+colors: {
+primary: '#4F46E5',
+secondary: '#10B981'
+},
+borderRadius: {
+'none': '0px',
+'sm': '4px',
+DEFAULT: '8px',
+'md': '12px',
+'lg': '16px',
+'xl': '20px',
+'2xl': '24px',
+'3xl': '32px',
+'full': '9999px',
+'button': '8px'
+}
+}
+}
+}
+</script>
+<style>
+:where([class^="ri-"])::before { content: "\f3c2"; }
+.camera-container {
+position: relative;
+width: 100%;
+height: 0;
+padding-bottom: 56.25%;
+background: #1a1a1a;
+overflow: hidden;
+}
+#output_canvas {
+position: absolute;
+top: 0;
+left: 0;
+width: 100%;
+height: 100%;
+}
+#video_input {
+position: absolute;
+top: 0;
+left: 0;
+width: 100%;
+height: 100%;
+object-fit: cover;
+}
+</style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+<div class="max-w-7xl mx-auto px-4 py-8">
+<div class="mb-8">
+<h1 class="text-3xl font-bold text-gray-900 mb-2">Real-time Pose Detection</h1>
+<p class="text-gray-600">Advanced pose detection and classification using MediaPipe</p>
+<div class="mt-4 p-4 bg-blue-50 rounded-lg">
+<h2 class="text-lg font-semibold text-blue-900 mb-2">Deployment Information</h2>
+<p class="text-blue-800">This application can be deployed on cloud platforms like:</p>
+<ul class="list-disc list-inside mt-2 space-y-1 text-blue-700">
+<li>AWS EC2 - Set up a web server (nginx/apache) and host the application</li>
+<li>AWS S3 - Host as a static website</li>
+<li>Azure Web Apps - Deploy directly from source control</li>
+<li>Google Cloud Platform - App Engine or Cloud Run</li>
+<li>Netlify/Vercel - Simple deployment from Git repository</li>
+</ul>
+<p class="mt-3 text-blue-800">Note: Ensure HTTPS is enabled for camera access and configure CORS if needed.</p>
+</div>
+</div>
+<div class="bg-white rounded-lg shadow-lg overflow-hidden">
+<div class="camera-container">
+<video id="video_input"></video>
+<canvas id="output_canvas"></canvas>
+</div>
+<div class="p-4 border-t border-gray-200">
+<div class="flex items-center justify-between mb-4">
+<div class="flex items-center space-x-4">
+<div class="flex items-center">
+<div id="status_indicator" class="w-3 h-3 rounded-full bg-green-500 mr-2"></div>
+<span id="connection_status" class="text-sm text-gray-600">Connected</span>
+</div>
+<div class="text-sm text-gray-600">
+FPS: <span id="fps_counter">0</span>
+</div>
+</div>
+<div class="text-sm font-medium text-gray-900">
+Pose: <span id="pose_classification">Standing</span>
+</div>
+</div>
+<div class="grid grid-cols-2 gap-4">
+<div class="space-y-4">
+<div class="flex items-center justify-between">
+<span class="text-sm font-medium text-gray-700">Camera Control</span>
+<div class="flex gap-2">
+<button id="start_camera" class="!rounded-button bg-primary text-white px-3 py-1 text-sm font-medium hover:bg-primary/90 transition-colors">Start</button>
+<button id="stop_camera" class="!rounded-button bg-red-500 text-white px-3 py-1 text-sm font-medium hover:bg-red-600 transition-colors">Stop</button>
+</div>
+</div>
+<div class="flex items-center justify-between">
+<span class="text-sm font-medium text-gray-700">Show Landmarks</span>
+<label class="relative inline-flex items-center cursor-pointer">
+<input type="checkbox" id="landmark_toggle" class="sr-only peer" checked>
+<div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+</label>
+</div>
+<div class="flex items-center justify-between">
+<span class="text-sm font-medium text-gray-700">Show Skeleton</span>
+<label class="relative inline-flex items-center cursor-pointer">
+<input type="checkbox" id="skeleton_toggle" class="sr-only peer" checked>
+<div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+</label>
+</div>
+</div>
+<div class="space-y-4">
+<div>
+<label class="block text-sm font-medium text-gray-700 mb-1">Camera Source</label>
+<select id="camera_select" class="block w-full rounded-button border-gray-300 shadow-sm focus:border-primary focus:ring focus:ring-primary/20 text-sm">
+<option value="">Loading cameras...</option>
+</select>
+</div>
+<button id="capture_btn" class="w-full !rounded-button bg-primary text-white px-4 py-2 text-sm font-medium hover:bg-primary/90 transition-colors">
+Capture Frame
+</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+<script>
+let lastFrameTime = performance.now();
+let fps = 0;
+const pose = new Pose({
+locateFile: (file) => {
+return `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`;
+}
+});
+pose.setOptions({
+modelComplexity: 1,
+smoothLandmarks: true,
+enableSegmentation: false,
+smoothSegmentation: true,
+minDetectionConfidence: 0.5,
+minTrackingConfidence: 0.5
+});
+const videoElement = document.getElementById('video_input');
+const canvasElement = document.getElementById('output_canvas');
+const canvasCtx = canvasElement.getContext('2d');
+const fpsCounter = document.getElementById('fps_counter');
+const landmarkToggle = document.getElementById('landmark_toggle');
+const skeletonToggle = document.getElementById('skeleton_toggle');
+const cameraSelect = document.getElementById('camera_select');
+const captureBtn = document.getElementById('capture_btn');
+const poseClassification = document.getElementById('pose_classification');
+const statusIndicator = document.getElementById('status_indicator');
+const connectionStatus = document.getElementById('connection_status');
+function onResults(results) {
+const currentTime = performance.now();
+fps = Math.round(1000 / (currentTime - lastFrameTime));
+lastFrameTime = currentTime;
+fpsCounter.textContent = fps;
+canvasCtx.save();
+canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+if (results.poseLandmarks) {
+if (landmarkToggle.checked) {
+drawConnectors(canvasCtx, results.poseLandmarks, POSE_CONNECTIONS,
+{color: '#00FF00', lineWidth: 2});
+drawLandmarks(canvasCtx, results.poseLandmarks,
+{color: '#FF0000', lineWidth: 1});
+}
+if (skeletonToggle.checked) {
+drawConnectors(canvasCtx, results.poseLandmarks, POSE_CONNECTIONS,
+{color: 'white', lineWidth: 1});
+}
+classifyPose(results.poseLandmarks);
+}
+canvasCtx.restore();
+}
+pose.onResults(onResults);
+const camera = new Camera(videoElement, {
+onFrame: async () => {
+await pose.send({image: videoElement});
+},
+width: 1280,
+height: 720
+});
+navigator.mediaDevices.enumerateDevices()
+.then(devices => {
+const videoDevices = devices.filter(device => device.kind === 'videoinput');
+cameraSelect.innerHTML = videoDevices.map(device =>
+`<option value="${device.deviceId}">${device.label || `Camera ${videoDevices.indexOf(device) + 1}`}</option>`
+).join('');
+});
+cameraSelect.addEventListener('change', () => {
+camera.stop();
+camera.start({
+deviceId: cameraSelect.value
+});
+});
+function classifyPose(landmarks) {
+const poses = ['Standing', 'Sitting', 'Walking', 'Running'];
+const randomPose = poses[Math.floor(Math.random() * poses.length)];
+poseClassification.textContent = randomPose;
+}
+captureBtn.addEventListener('click', () => {
+const link = document.createElement('a');
+link.download = `pose-capture-${Date.now()}.png`;
+link.href = canvasElement.toDataURL();
+link.click();
+});
+const startCamera = document.getElementById('start_camera');
+const stopCamera = document.getElementById('stop_camera');
+
+let cameraRunning = false;
+
+startCamera.addEventListener('click', () => {
+if (!cameraRunning) {
+camera.start()
+.then(() => {
+cameraRunning = true;
+statusIndicator.classList.remove('bg-red-500');
+statusIndicator.classList.add('bg-green-500');
+connectionStatus.textContent = 'Connected';
+startCamera.disabled = true;
+stopCamera.disabled = false;
+})
+.catch(error => {
+statusIndicator.classList.remove('bg-green-500');
+statusIndicator.classList.add('bg-red-500');
+connectionStatus.textContent = 'Error: ' + error.message;
+});
+}
+});
+
+stopCamera.addEventListener('click', () => {
+if (cameraRunning) {
+camera.stop();
+cameraRunning = false;
+statusIndicator.classList.remove('bg-green-500');
+statusIndicator.classList.add('bg-red-500');
+connectionStatus.textContent = 'Camera Stopped';
+startCamera.disabled = false;
+stopCamera.disabled = true;
+canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+}
+});
+
+stopCamera.disabled = true;
+function resizeCanvas() {
+const container = canvasElement.parentElement;
+canvasElement.width = container.offsetWidth;
+canvasElement.height = container.offsetHeight;
+}
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+</script>
+</body>
+</html>

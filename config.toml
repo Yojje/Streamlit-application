@@ -1,9 +1,0 @@
-[global]
-showWarningOnDirectExecution = false
-
-[logger]
-level = "error"
-
-[server]
-maxUploadSize = 200
-enableCORS = false
